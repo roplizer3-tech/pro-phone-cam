@@ -3,11 +3,8 @@ project(pro_phone_cam_windows LANGUAGES CXX)
 
 set(BINARY_NAME "pro_phone_cam_windows")
 
-cmake_policy(SET CMP0063 NEW)
+cmake_policy(VERSION 3.14...3.25)
 
-set(CMAKE_INSTALL_RPATH "$ORIGIN/lib")
-
-# Configure build options.
 get_property(IS_MULTICONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
 if(IS_MULTICONFIG)
   set(CMAKE_CONFIGURATION_TYPES "Debug;Profile;Release"
@@ -15,38 +12,70 @@ if(IS_MULTICONFIG)
 else()
   if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE "Debug" CACHE
-      STRING "Configuration to build (defaults to Debug)" FORCE)
+      STRING "Flutter build mode" FORCE)
     set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS
       "Debug" "Profile" "Release")
   endif()
 endif()
 
-set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_EXE_LINKER_FLAGS_PROFILE "${CMAKE_EXE_LINKER_FLAGS_RELEASE}")
+set(CMAKE_SHARED_LINKER_FLAGS_PROFILE "${CMAKE_SHARED_LINKER_FLAGS_RELEASE}")
+set(CMAKE_C_FLAGS_PROFILE "${CMAKE_C_FLAGS_RELEASE}")
+set(CMAKE_CXX_FLAGS_PROFILE "${CMAKE_CXX_FLAGS_RELEASE}")
 
-# Compilation-level warnings.
-add_compile_options($<$<CXX_COMPILER_ID:MSVC>:/W4>)
+add_definitions(-DUNICODE -D_UNICODE)
 
-# Application-level configurations.
+function(APPLY_STANDARD_SETTINGS TARGET)
+  target_compile_features(${TARGET} PUBLIC cxx_std_17)
+  target_compile_options(${TARGET} PRIVATE /W4 /WX /wd4100)
+  target_compile_options(${TARGET} PRIVATE /EHsc)
+  target_compile_definitions(${TARGET} PRIVATE "_HAS_EXCEPTIONS=0")
+  target_compile_definitions(${TARGET} PRIVATE "$<$<CONFIG:Debug>:_DEBUG>")
+endfunction()
+
 set(FLUTTER_MANAGED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/flutter")
-
-# Flutter framework and plugin targets.
 add_subdirectory(${FLUTTER_MANAGED_DIR})
 
-# Application target.
 add_subdirectory("runner")
 
-# Generated plugin targets.
-include("${FLUTTER_MANAGED_DIR}/generated_plugins.cmake")
-include("${CMAKE_CURRENT_SOURCE_DIR}/../native/CMakeLists.txt")
+include(flutter/generated_plugins.cmake OPTIONAL)
 
-# === Installation ===
 set(BUILD_BUNDLE_DIR "$<TARGET_FILE_DIR:${BINARY_NAME}>")
+set(CMAKE_VS_INCLUDE_INSTALL_TO_DEFAULT_BUILD 1)
+if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+  set(CMAKE_INSTALL_PREFIX "${BUILD_BUNDLE_DIR}" CACHE PATH "..." FORCE)
+endif()
 
-# Copy the native virtual camera driver DLL alongside the runner executable
-add_custom_command(
-  TARGET ${BINARY_NAME} POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E copy_if_different
-  "$<TARGET_FILE:prophone_cam_driver>"
-  "${BUILD_BUNDLE_DIR}/prophone_cam_driver.dll"
-)
+set(INSTALL_BUNDLE_DATA_DIR "${CMAKE_INSTALL_PREFIX}/data")
+set(INSTALL_BUNDLE_LIB_DIR "${CMAKE_INSTALL_PREFIX}")
+
+install(TARGETS ${BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
+  COMPONENT Runtime)
+
+install(FILES "${FLUTTER_ICU_DATA_FILE}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
+  COMPONENT Runtime)
+
+install(FILES "${FLUTTER_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+  COMPONENT Runtime)
+
+if(PLUGIN_BUNDLED_LIBRARIES)
+  install(FILES "${PLUGIN_BUNDLED_LIBRARIES}"
+    DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+    COMPONENT Runtime)
+endif()
+
+set(NATIVE_ASSETS_DIR "${PROJECT_BUILD_DIR}native_assets/windows/")
+install(DIRECTORY "${NATIVE_ASSETS_DIR}"
+   DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+   COMPONENT Runtime)
+
+set(FLUTTER_ASSET_DIR_NAME "flutter_assets")
+install(CODE "
+  file(REMOVE_RECURSE \"${INSTALL_BUNDLE_DATA_DIR}/${FLUTTER_ASSET_DIR_NAME}\")
+  " COMPONENT Runtime)
+install(DIRECTORY "${PROJECT_BUILD_DIR}/${FLUTTER_ASSET_DIR_NAME}"
+  DESTINATION "${INSTALL_BUNDLE_DATA_DIR}" COMPONENT Runtime)
+
+install(FILES "${AOT_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
+  CONFIGURATIONS Profile;Release
+  COMPONENT Runtime)

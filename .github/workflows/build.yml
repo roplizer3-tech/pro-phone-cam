@@ -15,7 +15,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup Java JDK
+      - name: Setup Java JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
@@ -28,13 +28,19 @@ jobs:
           channel: 'stable'
           cache: true
 
+      - name: Ensure Gradle Wrapper Exists
+        working-directory: ./pro_phone_cam/android_app/android
+        run: |
+          mkdir -p gradle/wrapper
+          curl -sLo gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v8.3.0/gradle/wrapper/gradle-wrapper.jar
+
       - name: Install Android App Dependencies
         working-directory: ./pro_phone_cam/android_app
         run: flutter pub get
 
       - name: Build Release APK
         working-directory: ./pro_phone_cam/android_app
-        run: flutter build apk --release
+        run: flutter build apk --release --verbose
 
       - name: Upload Android APK Artifact
         uses: actions/upload-artifact@v4
@@ -50,6 +56,12 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      - name: Enable Windows Developer Mode and Symlinks
+        shell: powershell
+        run: |
+          New-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock" -Name "AllowDevelopmentWithoutDevLicense" -PropertyType DWord -Value 1 -Force
+          git config --global core.symlinks true
+
       - name: Setup MSVC C++ Environment
         uses: ilammy/msvc-dev-cmd@v1
 
@@ -64,6 +76,7 @@ jobs:
         run: flutter config --enable-windows-desktop
 
       - name: Build Native C++ Virtual Camera Driver DLL
+        shell: powershell
         run: |
           cmake -B build-native -S ./pro_phone_cam/windows_app/native -DCMAKE_BUILD_TYPE=Release
           cmake --build build-native --config Release
@@ -74,7 +87,7 @@ jobs:
 
       - name: Build Windows Executable (Release)
         working-directory: ./pro_phone_cam/windows_app
-        run: flutter build windows --release
+        run: flutter build windows --release --verbose
 
       - name: Bundle Portable ADB & C++ Driver DLL
         shell: powershell
