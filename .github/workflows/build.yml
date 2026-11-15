@@ -34,7 +34,7 @@ jobs:
 
       - name: Build Release APK
         working-directory: ./pro_phone_cam/android_app
-        run: flutter build apk --release --split-per-abi=false
+        run: flutter build apk --release
 
       - name: Upload Android APK Artifact
         uses: actions/upload-artifact@v4
@@ -50,7 +50,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup CMake & MSVC
+      - name: Setup MSVC C++ Environment
         uses: ilammy/msvc-dev-cmd@v1
 
       - name: Setup Flutter SDK
@@ -65,11 +65,8 @@ jobs:
 
       - name: Build Native C++ Virtual Camera Driver DLL
         run: |
-          mkdir -p build-native
-          cd build-native
-          cmake ../pro_phone_cam/windows_app/native -DCMAKE_BUILD_TYPE=Release
-          cmake --build . --config Release
-          cd ..
+          cmake -B build-native -S ./pro_phone_cam/windows_app/native -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-native --config Release
 
       - name: Install Windows App Dependencies
         working-directory: ./pro_phone_cam/windows_app
@@ -80,6 +77,7 @@ jobs:
         run: flutter build windows --release
 
       - name: Bundle Portable ADB & C++ Driver DLL
+        shell: powershell
         run: |
           $releaseDir = "./pro_phone_cam/windows_app/build/windows/x64/runner/Release"
           
@@ -99,6 +97,7 @@ jobs:
           Copy-Item "pt_temp/platform-tools/AdbWinUsbApi.dll" -Destination "$releaseDir/tools/" -Force
 
       - name: Compress Complete Windows Release Bundle
+        shell: powershell
         run: |
           Compress-Archive -Path ./pro_phone_cam/windows_app/build/windows/x64/runner/Release/* -DestinationPath ./ProPhone-Windows-x64-Studio.zip
 

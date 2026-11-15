@@ -15,7 +15,7 @@
     <application
         android:label="ProPhone Cam"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@android:drawable/ic_menu_camera"
         android:hardwareAccelerated="true"
         android:largeHeap="true"
         android:keepScreenOn="true">
