@@ -8,17 +8,14 @@ namespace {
 
 constexpr const wchar_t kWindowClassName[] = L"FLUTTER_RUNNER_WIN32_WINDOW";
 
-// The number of Win32Window objects that currently exist.
 static int g_active_window_count = 0;
 
 using EnableNonClientDpiScaling = BOOL __stdcall(HWND hwnd);
 
-// Scales the number of pixels based on the given scale factor.
 int Scale(int source, double scale_factor) {
   return static_cast<int>(source * scale_factor);
 }
 
-// Dynamically loads the |EnableNonClientDpiScaling| from the user32.dll.
 void EnableFullDpiSupportIfAvailable(HWND hwnd) {
   HMODULE user32_module = LoadLibraryA("user32.dll");
   if (!user32_module) {
@@ -104,16 +101,13 @@ HWND Win32Window::GetNativeWindow() const {
 }
 
 bool Win32Window::OnCreate() {
-  // No-op; provided for subclasses.
   return true;
 }
 
 void Win32Window::OnDestroy() {
-  // No-op; provided for subclasses.
 }
 
 void Win32Window::UpdateTheme(HWND const window) {
-  // Support dark mode on modern Windows 10/11
   BOOL is_dark_mode = TRUE;
   DwmSetWindowAttribute(
       window, 20, &is_dark_mode, sizeof(is_dark_mode));
@@ -184,7 +178,6 @@ Win32Window* Win32Window::GetThisFromHandle(HWND const window) noexcept {
       GetWindowLongPtr(window, GWLP_USERDATA));
 }
 
-// WindowClassRegistrar implementation
 WindowClassRegistrar* WindowClassRegistrar::GetInstance() {
   static WindowClassRegistrar instance;
   return &instance;
@@ -210,7 +203,7 @@ const wchar_t* WindowClassRegistrar::GetOrCreateWindowClass() {
   window_class.cbClsExtra = 0;
   window_class.cbWndExtra = 0;
   window_class.hInstance = GetModuleHandle(nullptr);
-  window_class.hIcon = LoadIcon(window_class.hInstance, MAKEINTRESOURCE(IDI_APP_ICON));
+  window_class.hIcon = LoadIcon(nullptr, IDI_APPLICATION);
   window_class.hbrBackground = 0;
   window_class.lpszMenuName = nullptr;
   window_class.lpfnWndProc = Win32Window::WndProc;
