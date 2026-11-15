@@ -1,0 +1,25 @@
+name: pro_phone_cam_windows
+description: "ProPhone Webcam Studio for Windows - Receiver, Color Grading & DirectShow Bridge"
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.2.0 <4.0.0"
+  flutter: ">=3.16.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  ffi: ^2.1.2
+  path: ^1.9.0
+  shared_preferences: ^2.2.3
+  window_manager: ^0.3.9
+  cupertino_icons: ^1.0.6
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
