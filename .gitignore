@@ -1,0 +1,21 @@
+# Flutter / Dart
+.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# Android
+**/android/.gradle/
+**/android/local.properties
+**/android/**/build/
+
+# Windows
+**/windows/flutter/ephemeral/
+**/windows/x64/
+
+# Visual Studio / IDE
+.vs/
+.idea/
+*.iml
+*.log
