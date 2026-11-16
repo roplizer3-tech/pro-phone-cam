@@ -1,16 +1,16 @@
 class GradingSettings {
-  double brightness;    // -100 to +100 (0 default)
-  double contrast;      // 0.5 to 2.0 (1.0 default)
-  double saturation;    // 0.0 to 2.0 (1.0 default)
-  double warmth;        // -50 to +50 (0 default)
-  double tint;          // -50 to +50 (0 default)
-  double sharpness;     // 0.0 to 5.0 (0 default)
+  final double brightness;    // -100 to +100 (0 default)
+  final double contrast;      // 0.5 to 2.0 (1.0 default)
+  final double saturation;    // 0.0 to 2.0 (1.0 default)
+  final double warmth;        // -50 to +50 (0 default)
+  final double tint;          // -50 to +50 (0 default)
+  final double sharpness;     // 0.0 to 5.0 (0 default)
 
-  bool flipHorizontal;  // True-View Anti-Mirror for WhatsApp / Telegram
-  bool flipVertical;    // Upside down mounting
-  int rotation;         // 0, 90, 180, 270 degrees
+  final bool flipHorizontal;  // True-View Anti-Mirror for WhatsApp / Telegram
+  final bool flipVertical;    // Upside down mounting
+  final int rotation;         // 0, 90, 180, 270 degrees
 
-  GradingSettings({
+  const GradingSettings({
     this.brightness = 0.0,
     this.contrast = 1.0,
     this.saturation = 1.0,
@@ -21,6 +21,65 @@ class GradingSettings {
     this.flipVertical = false,
     this.rotation = 0,
   });
+
+  static final Map<String, GradingSettings> defaultPresets = {
+    'Default Natural': const GradingSettings(
+      brightness: 0.0,
+      contrast: 1.0,
+      saturation: 1.0,
+      warmth: 0.0,
+      tint: 0.0,
+      sharpness: 0.0,
+    ),
+    'Studio Warm': const GradingSettings(
+      brightness: 5.0,
+      contrast: 1.1,
+      saturation: 1.15,
+      warmth: 12.0,
+      tint: -2.0,
+      sharpness: 0.5,
+    ),
+    'Cool Daylight': const GradingSettings(
+      brightness: 2.0,
+      contrast: 1.05,
+      saturation: 0.95,
+      warmth: -15.0,
+      tint: 4.0,
+      sharpness: 0.3,
+    ),
+    'High Contrast': const GradingSettings(
+      brightness: 0.0,
+      contrast: 1.35,
+      saturation: 1.2,
+      warmth: 2.0,
+      tint: 0.0,
+      sharpness: 1.0,
+    ),
+  };
+
+  GradingSettings copyWith({
+    double? brightness,
+    double? contrast,
+    double? saturation,
+    double? warmth,
+    double? tint,
+    double? sharpness,
+    bool? flipHorizontal,
+    bool? flipVertical,
+    int? rotation,
+  }) {
+    return GradingSettings(
+      brightness: brightness ?? this.brightness,
+      contrast: contrast ?? this.contrast,
+      saturation: saturation ?? this.saturation,
+      warmth: warmth ?? this.warmth,
+      tint: tint ?? this.tint,
+      sharpness: sharpness ?? this.sharpness,
+      flipHorizontal: flipHorizontal ?? this.flipHorizontal,
+      flipVertical: flipVertical ?? this.flipVertical,
+      rotation: rotation ?? this.rotation,
+    );
+  }
 
   Map<String, dynamic> toJson() {
     return {
@@ -48,17 +107,5 @@ class GradingSettings {
       flipVertical: json['flipVertical'] as bool? ?? false,
       rotation: json['rotation'] as int? ?? 0,
     );
-  }
-
-  void reset() {
-    brightness = 0.0;
-    contrast = 1.0;
-    saturation = 1.0;
-    warmth = 0.0;
-    tint = 0.0;
-    sharpness = 0.0;
-    flipHorizontal = false;
-    flipVertical = false;
-    rotation = 0;
   }
 }

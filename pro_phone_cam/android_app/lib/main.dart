@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:wakelock_plus/wakelock_plus.dart';
 import 'models/camera_info.dart';
 import 'services/native_camera_bridge.dart';
 
@@ -51,7 +50,6 @@ class _CameraStreamPageState extends State<CameraStreamPage> {
   @override
   void initState() {
     super.initState();
-    WakelockPlus.enable(); // Prevent device sleep during webcam session
     _initBridge();
   }
 
@@ -112,7 +110,6 @@ class _CameraStreamPageState extends State<CameraStreamPage> {
   void dispose() {
     _subscription?.cancel();
     _bridge.stopServer();
-    WakelockPlus.disable();
     super.dispose();
   }
 
@@ -142,42 +139,33 @@ class _CameraStreamPageState extends State<CameraStreamPage> {
             ),
           ),
 
-          // OLED Ultra-Low-Power Black Screen Overlay
+          // True-Black OLED Screen Overlay for Power Saving & Heat Reduction
           if (_isBlackScreenActive)
             Positioned.fill(
               child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onDoubleTap: () => _toggleBlackScreen(false),
+                onTap: () => _toggleBlackScreen(false),
                 child: Container(
                   color: Colors.black,
-                  child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.videocam_rounded,
-                          size: 48,
-                          color: Colors.greenAccent.withOpacity(0.4),
+                  alignment: Alignment.center,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.videocam_rounded,
+                        size: 48,
+                        color: Colors.white.withAlpha(51),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        '1080p @ 60 FPS Streaming Active\nTap anywhere to wake display',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.white.withAlpha(77),
+                          fontSize: 13,
+                          letterSpacing: 0.5,
                         ),
-                        const SizedBox(height: 12),
-                        Text(
-                          'Streaming 1080p @ 60 FPS to PC',
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.35),
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Double-tap anywhere to wake screen',
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.2),
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -189,28 +177,41 @@ class _CameraStreamPageState extends State<CameraStreamPage> {
 
   Widget _buildHeader() {
     return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: const Color(0xFF6366F1).withOpacity(0.2),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: const Icon(Icons.camera_alt_rounded, color: Color(0xFF6366F1)),
-        ),
-        const SizedBox(width: 14),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
-            Text(
-              'ProPhone Cam',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF6366F1).withAlpha(51),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.camera_alt_rounded, color: Color(0xFF818CF8)),
             ),
-            Text(
-              '1080p @ 60 FPS • Zero-Latency USB',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
+            const SizedBox(width: 12),
+            const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'ProPhone Cam',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                ),
+                Text(
+                  'USB 1080p @ 60 FPS Native',
+                  style: TextStyle(fontSize: 12, color: Colors.white54),
+                ),
+              ],
             ),
           ],
+        ),
+        IconButton(
+          onPressed: _toggleTorch,
+          icon: Icon(
+            _isTorchOn ? Icons.flash_on_rounded : Icons.flash_off_rounded,
+            color: _isTorchOn ? Colors.amberAccent : Colors.white38,
+          ),
+          tooltip: 'Toggle Flashlight',
         ),
       ],
     );
@@ -223,7 +224,7 @@ class _CameraStreamPageState extends State<CameraStreamPage> {
         color: const Color(0xFF1E222D),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: _isConnectedToPc ? const Color(0xFF10B981) : Colors.amber.withOpacity(0.5),
+          color: _isConnectedToPc ? const Color(0xFF10B981) : Colors.white12,
           width: 1.5,
         ),
       ),
@@ -237,7 +238,7 @@ class _CameraStreamPageState extends State<CameraStreamPage> {
               color: _isConnectedToPc ? const Color(0xFF10B981) : Colors.amber,
               boxShadow: [
                 BoxShadow(
-                  color: (_isConnectedToPc ? const Color(0xFF10B981) : Colors.amber).withOpacity(0.6),
+                  color: (_isConnectedToPc ? const Color(0xFF10B981) : Colors.amber).withAlpha(128),
                   blurRadius: 8,
                   spreadRadius: 2,
                 ),
@@ -250,17 +251,20 @@ class _CameraStreamPageState extends State<CameraStreamPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _isConnectedToPc ? 'Connected to PC' : 'Listening on Port 5000',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  _isConnectedToPc ? 'Connected to Windows Studio' : 'Waiting for USB Connection',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 Text(
-                  _statusMessage,
-                  style: const TextStyle(fontSize: 12, color: Colors.white70),
+                  _statusMessage.isEmpty
+                      ? (_isConnectedToPc ? 'Zero-latency TCP streaming' : 'Port 5000 listening via ADB')
+                      : _statusMessage,
+                  style: const TextStyle(fontSize: 12, color: Colors.white54),
                 ),
               ],
             ),
           ),
+          const Icon(Icons.usb_rounded, color: Colors.white38),
         ],
       ),
     );
@@ -271,33 +275,34 @@ class _CameraStreamPageState extends State<CameraStreamPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Active Hardware Camera Lens',
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white70),
+          'PHYSICAL CAMERA SENSORS',
+          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white38, letterSpacing: 1.1),
         ),
         const SizedBox(height: 12),
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: _cameras.map((cam) {
-            final isSelected = cam.id == _selectedCameraId;
-            return ChoiceChip(
-              selected: isSelected,
-              label: Text('${cam.label} (${cam.facing})'),
-              avatar: Icon(
-                cam.facing == 'front' ? Icons.camera_front : Icons.camera_rear,
-                size: 16,
-                color: isSelected ? Colors.white : Colors.grey,
-              ),
-              selectedColor: const Color(0xFF6366F1),
-              backgroundColor: const Color(0xFF1E222D),
-              labelStyle: TextStyle(
-                color: isSelected ? Colors.white : Colors.white70,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-              ),
-              onSelected: (_) => _switchCamera(cam.id),
-            );
-          }).toList(),
-        ),
+        if (_cameras.isEmpty)
+          const Text('Discovering cameras via Camera2...', style: TextStyle(color: Colors.white54, fontSize: 13))
+        else
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _cameras.map((cam) {
+              final bool isSelected = cam.id == _selectedCameraId;
+              return ChoiceChip(
+                label: Text('${cam.label} (${cam.facing})'),
+                selected: isSelected,
+                selectedColor: const Color(0xFF6366F1),
+                backgroundColor: const Color(0xFF1E222D),
+                labelStyle: TextStyle(
+                  color: isSelected ? Colors.white : Colors.white70,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                  fontSize: 12,
+                ),
+                onSelected: (val) {
+                  if (val) _switchCamera(cam.id);
+                },
+              );
+            }).toList(),
+          ),
       ],
     );
   }
@@ -309,21 +314,23 @@ class _CameraStreamPageState extends State<CameraStreamPage> {
         color: const Color(0xFF1E222D),
         borderRadius: BorderRadius.circular(16),
       ),
-      child: Column(
+      child: const Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Hardware Toggles',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white70),
+          Row(
+            children: [
+              Icon(Icons.tune_rounded, size: 18, color: Color(0xFF818CF8)),
+              SizedBox(width: 8),
+              Text(
+                'Hardware Tuners Active',
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: Colors.white),
+              ),
+            ],
           ),
-          const SizedBox(height: 12),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('LED Torch / Flashlight'),
-            subtitle: const Text('Keep flash on for face illumination in low light', style: TextStyle(fontSize: 11)),
-            value: _isTorchOn,
-            activeColor: const Color(0xFF6366F1),
-            onChanged: (val) => _toggleTorch(),
+          SizedBox(height: 8),
+          Text(
+            'Zoom, Focus, Exposure & White Balance parameters are automatically orchestrated from Windows Control Studio via bi-directional JSON control link.',
+            style: TextStyle(fontSize: 12, color: Colors.white54, height: 1.4),
           ),
         ],
       ),
@@ -332,20 +339,17 @@ class _CameraStreamPageState extends State<CameraStreamPage> {
 
   Widget _buildBlackScreenButton() {
     return ElevatedButton.icon(
+      onPressed: () => _toggleBlackScreen(true),
+      icon: const Icon(Icons.energy_savings_leaf_rounded, color: Colors.white),
+      label: const Text('Enable OLED Power-Saver Mode'),
       style: ElevatedButton.styleFrom(
         backgroundColor: const Color(0xFF1E222D),
         foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(vertical: 16),
+        padding: const EdgeInsets.symmetric(vertical: 14),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-          side: const BorderSide(color: Color(0xFF6366F1), width: 1.2),
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: Colors.white12),
         ),
-      ),
-      onPressed: () => _toggleBlackScreen(true),
-      icon: const Icon(Icons.power_settings_new_rounded, color: Color(0xFF6366F1)),
-      label: const Text(
-        'Activate OLED Power-Saving Black Screen',
-        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
       ),
     );
   }

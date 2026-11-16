@@ -106,7 +106,9 @@ class AdbDaemon {
           onDeviceUnplugged();
         }
       }
-    } catch (e) {}
+    } catch (_) {
+      // Ignore transient scan failure while device initializes
+    }
   }
 
   Future<void> _setupTunnelAndLaunch(String adb, String serial) async {

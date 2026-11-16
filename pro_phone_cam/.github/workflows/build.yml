@@ -28,6 +28,9 @@ jobs:
           channel: 'stable'
           cache: true
 
+      - name: Precache Flutter Android
+        run: flutter precache --android
+
       - name: Ensure Gradle Wrapper Exists
         working-directory: ./pro_phone_cam/android_app/android
         run: |
@@ -82,7 +85,9 @@ jobs:
           cache: true
 
       - name: Enable Windows Desktop in Flutter
-        run: flutter config --enable-windows-desktop
+        run: |
+          flutter config --enable-windows-desktop
+          flutter precache --windows
 
       - name: Build Native C++ Virtual Camera Driver DLL
         shell: powershell
@@ -98,7 +103,7 @@ jobs:
         working-directory: ./pro_phone_cam/windows_app
         shell: powershell
         run: |
-          flutter build windows --release -v | Tee-Object -FilePath build_windows.log
+          flutter build windows --release -v 2>&1 | Tee-Object -FilePath build_windows.log
           if ($LASTEXITCODE -ne 0) {
             Get-Content build_windows.log -Tail 150
             exit $LASTEXITCODE
