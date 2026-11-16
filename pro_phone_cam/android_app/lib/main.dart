@@ -41,7 +41,6 @@ class _CameraStreamPageState extends State<CameraStreamPage> {
   final NativeCameraBridge _bridge = NativeCameraBridge();
   StreamSubscription<dynamic>? _subscription;
 
-  bool _isServerRunning = false;
   bool _isConnectedToPc = false;
   String _statusMessage = 'Initializing...';
   List<PhysicalCamera> _cameras = [];
@@ -52,11 +51,12 @@ class _CameraStreamPageState extends State<CameraStreamPage> {
   @override
   void initState() {
     super.initState();
-    WakelockPlus.enable();
+    WakelockPlus.enable(); // Prevent device sleep during webcam session
     _initBridge();
   }
 
   Future<void> _initBridge() async {
+    // Listen for native events (PC connection state, remote power-save toggles)
     _subscription = _bridge.eventStream.listen((event) {
       if (event is Map) {
         final String eventType = event['event'] as String? ?? '';
@@ -73,11 +73,11 @@ class _CameraStreamPageState extends State<CameraStreamPage> {
       }
     });
 
+    // Start native USB server & default camera
     final bool started = await _bridge.startServer();
     if (started) {
       final List<PhysicalCamera> cams = await _bridge.getCameras();
       setState(() {
-        _isServerRunning = true;
         _cameras = cams;
         if (cams.isNotEmpty) {
           _selectedCameraId = cams.first.id;
@@ -121,6 +121,7 @@ class _CameraStreamPageState extends State<CameraStreamPage> {
     return Scaffold(
       body: Stack(
         children: [
+          // Main Dashboard UI
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
@@ -140,6 +141,8 @@ class _CameraStreamPageState extends State<CameraStreamPage> {
               ),
             ),
           ),
+
+          // OLED Ultra-Low-Power Black Screen Overlay
           if (_isBlackScreenActive)
             Positioned.fill(
               child: GestureDetector(
