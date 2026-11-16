@@ -1,0 +1,144 @@
+name: Build ProPhone Cam (Android & Windows)
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build-android:
+    name: Build Android 1080p60 Sender APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.27.x'
+          channel: 'stable'
+          cache: true
+
+      - name: Ensure Gradle Wrapper Exists
+        working-directory: ./pro_phone_cam/android_app/android
+        run: |
+          mkdir -p gradle/wrapper
+          curl -sLo gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v8.4.0/gradle/wrapper/gradle-wrapper.jar
+
+      - name: Install Android App Dependencies
+        working-directory: ./pro_phone_cam/android_app
+        run: flutter pub get
+
+      - name: Build Release APK
+        working-directory: ./pro_phone_cam/android_app
+        run: |
+          set -o pipefail
+          flutter build apk --release -v 2>&1 | tee build_apk.log
+
+      - name: Upload Android Build Log on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Android-Build-Log
+          path: ./pro_phone_cam/android_app/build_apk.log
+
+      - name: Upload Android APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ProPhoneCam-Android-1080p60-Release
+          path: ./pro_phone_cam/android_app/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+
+  build-windows:
+    name: Build Windows Desktop Control Studio & FFI Driver
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Enable Windows Developer Mode and Symlinks
+        shell: powershell
+        run: |
+          New-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock" -Name "AllowDevelopmentWithoutDevLicense" -PropertyType DWord -Value 1 -Force
+          git config --global core.symlinks true
+
+      - name: Setup MSVC C++ Environment
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Setup Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.27.x'
+          channel: 'stable'
+          cache: true
+
+      - name: Enable Windows Desktop in Flutter
+        run: flutter config --enable-windows-desktop
+
+      - name: Build Native C++ Virtual Camera Driver DLL
+        shell: powershell
+        run: |
+          cmake -B build-native -S ./pro_phone_cam/windows_app/native -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-native --config Release
+
+      - name: Install Windows App Dependencies
+        working-directory: ./pro_phone_cam/windows_app
+        run: flutter pub get
+
+      - name: Build Windows Executable (Release)
+        working-directory: ./pro_phone_cam/windows_app
+        shell: powershell
+        run: |
+          flutter build windows --release -v | Tee-Object -FilePath build_windows.log
+          if ($LASTEXITCODE -ne 0) {
+            Get-Content build_windows.log -Tail 150
+            exit $LASTEXITCODE
+          }
+
+      - name: Upload Windows Build Log on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Windows-Build-Log
+          path: ./pro_phone_cam/windows_app/build_windows.log
+
+      - name: Bundle Portable ADB & C++ Driver DLL
+        shell: powershell
+        run: |
+          $releaseDir = "./pro_phone_cam/windows_app/build/windows/x64/runner/Release"
+          
+          # 1. Copy compiled C++ FFI driver DLL to Release root
+          if (Test-Path "./build-native/Release/prophone_cam_driver.dll") {
+              Copy-Item "./build-native/Release/prophone_cam_driver.dll" -Destination "$releaseDir/" -Force
+          } elseif (Test-Path "./build-native/prophone_cam_driver.dll") {
+              Copy-Item "./build-native/prophone_cam_driver.dll" -Destination "$releaseDir/" -Force
+          }
+
+          # 2. Download portable Google Platform-Tools (ADB) for 100% plug & play on any PC
+          New-Item -ItemType Directory -Force -Path "$releaseDir/tools"
+          Invoke-WebRequest -Uri "https://dl.google.com/android/repository/platform-tools-latest-windows.zip" -OutFile "platform-tools.zip"
+          Expand-Archive -Path "platform-tools.zip" -DestinationPath "pt_temp"
+          Copy-Item "pt_temp/platform-tools/adb.exe" -Destination "$releaseDir/tools/" -Force
+          Copy-Item "pt_temp/platform-tools/AdbWinApi.dll" -Destination "$releaseDir/tools/" -Force
+          Copy-Item "pt_temp/platform-tools/AdbWinUsbApi.dll" -Destination "$releaseDir/tools/" -Force
+
+      - name: Compress Complete Windows Release Bundle
+        shell: powershell
+        run: |
+          Compress-Archive -Path ./pro_phone_cam/windows_app/build/windows/x64/runner/Release/* -DestinationPath ./ProPhone-Windows-x64-Studio.zip
+
+      - name: Upload Windows Studio Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ProPhoneCam-Windows-x64-Studio
+          path: ./ProPhone-Windows-x64-Studio.zip
+          if-no-files-found: error

@@ -32,7 +32,7 @@ jobs:
         working-directory: ./pro_phone_cam/android_app/android
         run: |
           mkdir -p gradle/wrapper
-          curl -sLo gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v8.3.0/gradle/wrapper/gradle-wrapper.jar
+          curl -sLo gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v8.4.0/gradle/wrapper/gradle-wrapper.jar
 
       - name: Install Android App Dependencies
         working-directory: ./pro_phone_cam/android_app
@@ -40,7 +40,16 @@ jobs:
 
       - name: Build Release APK
         working-directory: ./pro_phone_cam/android_app
-        run: flutter build apk --release --verbose
+        run: |
+          set -o pipefail
+          flutter build apk --release -v 2>&1 | tee build_apk.log
+
+      - name: Upload Android Build Log on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Android-Build-Log
+          path: ./pro_phone_cam/android_app/build_apk.log
 
       - name: Upload Android APK Artifact
         uses: actions/upload-artifact@v4
@@ -87,7 +96,20 @@ jobs:
 
       - name: Build Windows Executable (Release)
         working-directory: ./pro_phone_cam/windows_app
-        run: flutter build windows --release --verbose
+        shell: powershell
+        run: |
+          flutter build windows --release -v | Tee-Object -FilePath build_windows.log
+          if ($LASTEXITCODE -ne 0) {
+            Get-Content build_windows.log -Tail 150
+            exit $LASTEXITCODE
+          }
+
+      - name: Upload Windows Build Log on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Windows-Build-Log
+          path: ./pro_phone_cam/windows_app/build_windows.log
 
       - name: Bundle Portable ADB & C++ Driver DLL
         shell: powershell

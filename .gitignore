@@ -19,3 +19,7 @@ build/
 .idea/
 *.iml
 *.log
+
+# Temp
+temp_check/
+fix_pack.json
