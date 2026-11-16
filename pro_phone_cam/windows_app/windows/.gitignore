@@ -1,2 +1,16 @@
-# Flutter-specific
-flutter/ephemeral/
+pro_phone_cam_windows.exe
+*.dll
+*.obj
+*.pdb
+*.ilk
+*.exp
+*.lib
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+pro_phone_cam_windows.dir/
+x64/
+Debug/
+Release/
+Profile/
