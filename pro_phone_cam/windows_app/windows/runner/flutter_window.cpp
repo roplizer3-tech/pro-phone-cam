@@ -31,7 +31,7 @@ bool FlutterWindow::OnCreate() {
     this->Show();
   });
 
-  // Flutter can complete the first frame before the "Show" callback is
+  // Flutter can complete the first frame before the "show window" callback is
   // registered. The following call ensures a frame is pending to ensure the
   // window is shown. It is a no-op if the first frame hasn't completed yet.
   flutter_controller_->ForceRedraw();
@@ -54,11 +54,17 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
   // Give Flutter, including plugins, an opportunity to handle window messages.
   if (flutter_controller_) {
     std::optional<LRESULT> result =
-        flutter_controller_->HandleTopLevelWindowMessage(hwnd, message, wparam,
-                                                        lparam);
+        flutter_controller_->HandleTopLevelWindowProc(hwnd, message, wparam,
+                                                      lparam);
     if (result) {
       return *result;
     }
+  }
+
+  switch (message) {
+    case WM_FONTCHANGE:
+      flutter_controller_->engine()->ReloadSystemFonts();
+      break;
   }
 
   return Win32Window::MessageHandler(hwnd, message, wparam, lparam);
