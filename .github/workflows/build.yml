@@ -136,6 +136,51 @@ jobs:
           Copy-Item "pt_temp/platform-tools/AdbWinApi.dll" -Destination "$releaseDir/tools/" -Force
           Copy-Item "pt_temp/platform-tools/AdbWinUsbApi.dll" -Destination "$releaseDir/tools/" -Force
 
+          # 3. Download and bundle official UnityCapture DirectShow 64-bit and 32-bit Filter DLLs
+          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/schellingb/UnityCapture/master/Install/UnityCaptureFilter64.dll" -OutFile "$releaseDir/UnityCaptureFilter64.dll"
+          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/schellingb/UnityCapture/master/Install/UnityCaptureFilter32.dll" -OutFile "$releaseDir/UnityCaptureFilter32.dll"
+
+          # 4. Generate Register-Camera.bat and Uninstall-Camera.bat in Release root
+          $regBat = @"
+@echo off
+title Register ProPhone Webcam DirectShow Driver
+>nul 2>&1 "%SYSTEMROOT%\system32\cacls.exe" "%SYSTEMROOT%\system32\config\system"
+if '%errorlevel%' NEQ '0' (
+    echo Requesting administrative privileges...
+    powershell -Command "Start-Process cmd -ArgumentList '/c \"\"%~f0\"\"' -Verb RunAs"
+    exit /b
+)
+cd /d "%~dp0"
+echo Registering ProPhone Webcam into Windows DirectShow...
+regsvr32 /s /i:"UnityCaptureName=ProPhone Webcam" "UnityCaptureFilter64.dll"
+regsvr32 /s /i:"UnityCaptureName=ProPhone Webcam" "UnityCaptureFilter32.dll"
+echo.
+echo ========================================================
+echo   SUCCESS! "ProPhone Webcam" is now registered!
+echo   It will appear in WhatsApp, Telegram, Zoom, Chrome,
+echo   and Windows Camera as a real webcam.
+echo ========================================================
+timeout /t 3 >nul
+"@
+          Set-Content -Path "$releaseDir/Register-Camera.bat" -Value $regBat
+
+          $unregBat = @"
+@echo off
+title Unregister ProPhone Webcam DirectShow Driver
+>nul 2>&1 "%SYSTEMROOT%\system32\cacls.exe" "%SYSTEMROOT%\system32\config\system"
+if '%errorlevel%' NEQ '0' (
+    echo Requesting administrative privileges...
+    powershell -Command "Start-Process cmd -ArgumentList '/c \"\"%~f0\"\"' -Verb RunAs"
+    exit /b
+)
+cd /d "%~dp0"
+regsvr32 /u /s "UnityCaptureFilter64.dll"
+regsvr32 /u /s "UnityCaptureFilter32.dll"
+echo Done.
+timeout /t 3 >nul
+"@
+          Set-Content -Path "$releaseDir/Uninstall-Camera.bat" -Value $unregBat
+
       - name: Compress Complete Windows Release Bundle
         shell: powershell
         run: |

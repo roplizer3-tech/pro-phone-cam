@@ -23,6 +23,42 @@ class PreviewPanel extends StatelessWidget {
     required this.isOledBlackScreenActive,
   });
 
+  ColorFilter _buildColorFilter(GradingSettings g) {
+    final double b = g.brightness * 1.5;
+    final double c = g.contrast;
+    final double s = g.saturation;
+    final double w = g.warmth * 1.2;
+    final double t = g.tint * 1.2;
+
+    const double lr = 0.2126;
+    const double lg = 0.7152;
+    const double lb = 0.0722;
+
+    final double invS = 1.0 - s;
+    final double rR = (invS * lr + s) * c;
+    final double rG = (invS * lg) * c;
+    final double rB = (invS * lb) * c;
+
+    final double gR = (invS * lr) * c;
+    final double gG = (invS * lg + s) * c;
+    final double gB = (invS * lb) * c;
+
+    final double bR = (invS * lr) * c;
+    final double bG = (invS * lg) * c;
+    final double bB = (invS * lb + s) * c;
+
+    final double offR = b + w + (128.0 * (1.0 - c));
+    final double offG = b + t + (128.0 * (1.0 - c));
+    final double offB = b - w + (128.0 * (1.0 - c));
+
+    return ColorFilter.matrix([
+      rR, rG, rB, 0, offR,
+      gR, gG, gB, 0, offG,
+      bR, bG, bB, 0, offB,
+      0,  0,  0,  1, 0,
+    ]);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -41,11 +77,14 @@ class PreviewPanel extends StatelessWidget {
               transform: Matrix4.identity()
                 ..scale(grading.flipHorizontal ? -1.0 : 1.0, grading.flipVertical ? -1.0 : 1.0)
                 ..rotateZ(grading.rotation * (math.pi / 180.0)),
-              child: Image.memory(
-                frameBytes!,
-                gaplessPlayback: true,
-                fit: BoxFit.contain,
-                filterQuality: FilterQuality.low,
+              child: ColorFiltered(
+                colorFilter: _buildColorFilter(grading),
+                child: Image.memory(
+                  frameBytes!,
+                  gaplessPlayback: true,
+                  fit: BoxFit.contain,
+                  filterQuality: FilterQuality.low,
+                ),
               ),
             )
           else

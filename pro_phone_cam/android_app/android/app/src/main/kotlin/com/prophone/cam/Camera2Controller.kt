@@ -243,7 +243,9 @@ class Camera2Controller(
                 set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE)
                 set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON)
                 set(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_AUTO)
-                set(CaptureRequest.JPEG_QUALITY, 88.toByte())
+                set(CaptureRequest.JPEG_QUALITY, 78.toByte())
+                set(CaptureRequest.NOISE_REDUCTION_MODE, CaptureRequest.NOISE_REDUCTION_MODE_FAST)
+                set(CaptureRequest.EDGE_MODE, CaptureRequest.EDGE_MODE_FAST)
             }
 
             device.createCaptureSession(listOf(surface), object : CameraCaptureSession.StateCallback() {

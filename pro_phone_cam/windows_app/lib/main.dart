@@ -71,6 +71,7 @@ class _StudioMainPageState extends State<StudioMainPage> {
   bool _isTorchOn = false;
 
   final List<String> _logs = [];
+  int _lastUiFrameTime = 0;
 
   @override
   void initState() {
@@ -105,9 +106,19 @@ class _StudioMainPageState extends State<StudioMainPage> {
     // 2. Setup Frame Receiver
     _frameReceiver = FrameReceiver(
       onFrameReceived: (bytes, timestamp, cameraId) {
-        setState(() {
-          _latestFrameBytes = bytes;
-        });
+        // Stream frame directly to Windows Virtual Camera (DirectShow / UnityCapture Shared Memory)
+        _virtualCam.sendJpegFrame(bytes, _grading);
+
+        // Throttle UI preview to smooth 30 FPS to prevent GUI freeze
+        final int now = DateTime.now().millisecondsSinceEpoch;
+        if (now - _lastUiFrameTime >= 33) {
+          _lastUiFrameTime = now;
+          if (mounted) {
+            setState(() {
+              _latestFrameBytes = bytes;
+            });
+          }
+        }
       },
       onCamerasUpdated: (cams) {
         setState(() {
@@ -216,14 +227,17 @@ class _StudioMainPageState extends State<StudioMainPage> {
     _frameReceiver.sendCommand({'action': 'set_power_save', 'enabled': newState});
   }
 
-  void _registerVirtualCameraInSystem() {
-    final res = _virtualCam.registerSystemWebcam('ProPhone Webcam');
-    setState(() {
-      _isVirtualCamRegistered = res;
-    });
+  Future<void> _registerVirtualCameraInSystem() async {
+    _addLog('Requesting Administrator elevation to register DirectShow webcam...');
+    final res = await _virtualCam.registerSystemWebcam();
+    if (mounted) {
+      setState(() {
+        _isVirtualCamRegistered = res;
+      });
+    }
     _addLog(res
         ? 'Successfully registered "ProPhone Webcam" in Windows DirectShow!'
-        : 'Failed registering DirectShow filter (Requires admin permissions).');
+        : 'Registration completed or cancelled by user.');
   }
 
   @override

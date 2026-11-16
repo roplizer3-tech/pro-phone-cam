@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:flutter/foundation.dart';
 import '../models/camera_info.dart';
 
 class FrameReceiver {
@@ -18,9 +17,14 @@ class FrameReceiver {
   bool _isConnected = false;
 
   static const int headerSize = 16;
-  static const List<int> magicBytes = [0x50, 0x50, 0x43, 0x4D];
+  static const int magic0 = 0x50; // 'P'
+  static const int magic1 = 0x50; // 'P'
+  static const int magic2 = 0x43; // 'C'
+  static const int magic3 = 0x4D; // 'M'
 
-  final BytesBuilder _buffer = BytesBuilder(copy: false);
+  // Pre-allocated 4MB linear ring-free packet assembly buffer
+  final Uint8List _ringBuf = Uint8List(4 * 1024 * 1024);
+  int _bufWritePos = 0;
 
   int _frameCount = 0;
   int _byteCount = 0;
@@ -53,7 +57,6 @@ class FrameReceiver {
     while (_isRunning) {
       if (!_isConnected) {
         try {
-          onLog('Attempting TCP handshake with Phone on 127.0.0.1:5000...');
           final socket = await Socket.connect('127.0.0.1', 5000, timeout: const Duration(seconds: 2));
           socket.setOption(SocketOption.tcpNoDelay, true);
           _socket = socket;
@@ -81,59 +84,75 @@ class FrameReceiver {
     }
   }
 
-  void _onDataReceived(Uint8List data) {
-    _byteCount += data.length;
-    _buffer.add(data);
+  void _onDataReceived(Uint8List chunk) {
+    final int chunkLen = chunk.length;
+    _byteCount += chunkLen;
+
+    // Guard against buffer overflow
+    if (_bufWritePos + chunkLen > _ringBuf.length) {
+      _bufWritePos = 0; // Reset if choked
+    }
+
+    _ringBuf.setRange(_bufWritePos, _bufWritePos + chunkLen, chunk);
+    _bufWritePos += chunkLen;
+
+    int readOffset = 0;
 
     while (true) {
-      final currentBytes = _buffer.toBytes();
-      if (currentBytes.length < headerSize) break;
+      final int available = _bufWritePos - readOffset;
+      if (available < headerSize) break;
 
+      // Scan for 'PPCM' magic bytes
       int magicIdx = -1;
-      for (int i = 0; i <= currentBytes.length - 4; i++) {
-        if (currentBytes[i] == magicBytes[0] &&
-            currentBytes[i + 1] == magicBytes[1] &&
-            currentBytes[i + 2] == magicBytes[2] &&
-            currentBytes[i + 3] == magicBytes[3]) {
+      for (int i = readOffset; i <= _bufWritePos - 4; i++) {
+        if (_ringBuf[i] == magic0 &&
+            _ringBuf[i + 1] == magic1 &&
+            _ringBuf[i + 2] == magic2 &&
+            _ringBuf[i + 3] == magic3) {
           magicIdx = i;
           break;
         }
       }
 
       if (magicIdx == -1) {
-        _buffer.clear();
+        // No magic header found in the entire buffer; discard garbage
+        _bufWritePos = 0;
         break;
       }
 
-      if (magicIdx > 0) {
-        final remaining = currentBytes.sublist(magicIdx);
-        _buffer.clear();
-        _buffer.add(remaining);
-        continue;
-      }
+      readOffset = magicIdx;
+      if (_bufWritePos - readOffset < headerSize) break;
 
-      if (currentBytes.length < headerSize) break;
-
-      final byteData = ByteData.sublistView(currentBytes, 0, headerSize);
+      final byteData = ByteData.sublistView(_ringBuf, readOffset, readOffset + headerSize);
       final int packetType = byteData.getUint8(4);
       final int cameraIdIndex = byteData.getUint16(6, Endian.big);
       final int payloadLength = byteData.getUint32(8, Endian.big);
       final int timestampMs = byteData.getUint32(12, Endian.big);
 
-      final int totalPacketSize = headerSize + payloadLength;
-      if (currentBytes.length < totalPacketSize) break;
+      // Sanity check payload size (< 5MB)
+      if (payloadLength > 5 * 1024 * 1024) {
+        readOffset += 4;
+        continue;
+      }
 
-      final payload = currentBytes.sublist(headerSize, totalPacketSize);
-      final remaining = currentBytes.sublist(totalPacketSize);
-      _buffer.clear();
-      _buffer.add(remaining);
+      final int totalPacketSize = headerSize + payloadLength;
+      if (_bufWritePos - readOffset < totalPacketSize) {
+        // Need more data from next TCP packet
+        break;
+      }
+
+      final int payloadStart = readOffset + headerSize;
+      final int payloadEnd = payloadStart + payloadLength;
 
       if (packetType == 0x01) {
         _frameCount++;
-        onFrameReceived(payload, timestampMs, cameraIdIndex);
+        // Fast zero-copy typed view of the frame JPEG payload
+        final payloadView = Uint8List.sublistView(_ringBuf, payloadStart, payloadEnd);
+        onFrameReceived(payloadView, timestampMs, cameraIdIndex);
       } else if (packetType == 0x02 || packetType == 0x03) {
         try {
-          final jsonStr = utf8.decode(payload);
+          final payloadBytes = Uint8List.sublistView(_ringBuf, payloadStart, payloadEnd);
+          final jsonStr = utf8.decode(payloadBytes);
           final decoded = jsonDecode(jsonStr);
           if (decoded is Map<String, dynamic>) {
             final type = decoded['type'];
@@ -147,10 +166,19 @@ class FrameReceiver {
               onTelemetryReceived(battery, blackScreen);
             }
           }
-        } catch (e) {
-          onLog('Error parsing telemetry JSON: $e');
-        }
+        } catch (_) {}
       }
+
+      readOffset += totalPacketSize;
+    }
+
+    // Shift remaining unprocessed bytes to front
+    if (readOffset > 0) {
+      final int remaining = _bufWritePos - readOffset;
+      if (remaining > 0) {
+        _ringBuf.setRange(0, remaining, _ringBuf, readOffset);
+      }
+      _bufWritePos = remaining;
     }
   }
 
@@ -188,6 +216,6 @@ class FrameReceiver {
       _socket?.destroy();
       _socket = null;
     } catch (_) {}
-    _buffer.clear();
+    _bufWritePos = 0;
   }
 }

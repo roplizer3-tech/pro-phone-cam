@@ -1,5 +1,6 @@
 import 'dart:ffi';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:ffi/ffi.dart';
 import 'package:path/path.dart' as p;
 import '../models/grading_settings.dart';
@@ -7,9 +8,9 @@ import '../models/grading_settings.dart';
 typedef _InitCamC = Int32 Function(Int32 width, Int32 height, Int32 fps);
 typedef _InitCamDart = int Function(int width, int height, int fps);
 
-typedef _SendFrameGradingC = Int32 Function(
-  Pointer<Uint8> rawBgra,
-  Int32 bufferSize,
+typedef _SendJpegFrameC = Int32 Function(
+  Pointer<Uint8> jpegBytes,
+  Int32 jpegSize,
   Float brightness,
   Float contrast,
   Float saturation,
@@ -20,9 +21,9 @@ typedef _SendFrameGradingC = Int32 Function(
   Int32 rotation,
 );
 
-typedef _SendFrameGradingDart = int Function(
-  Pointer<Uint8> rawBgra,
-  int bufferSize,
+typedef _SendJpegFrameDart = int Function(
+  Pointer<Uint8> jpegBytes,
+  int jpegSize,
   double brightness,
   double contrast,
   double saturation,
@@ -33,25 +34,21 @@ typedef _SendFrameGradingDart = int Function(
   int rotation,
 );
 
-typedef _RegisterFilterC = Int32 Function(Pointer<Utf16> friendlyName);
-typedef _RegisterFilterDart = int Function(Pointer<Utf16> friendlyName);
-
-typedef _UnregisterFilterC = Int32 Function();
-typedef _UnregisterFilterDart = int Function();
-
 typedef _CloseCamC = Void Function();
 typedef _CloseCamDart = void Function();
 
 class VirtualCameraBridge {
   DynamicLibrary? _dylib;
   _InitCamDart? _initCam;
-  _SendFrameGradingDart? _sendFrameGrading;
-  _RegisterFilterDart? _registerFilter;
-  _UnregisterFilterDart? _unregisterFilter;
+  _SendJpegFrameDart? _sendJpegFrame;
   _CloseCamDart? _closeCam;
 
   bool _isInitialized = false;
   bool get isDriverLoaded => _dylib != null;
+
+  // Reusable native buffer for passing frame bytes without churn
+  Pointer<Uint8>? _nativeBuffer;
+  int _allocatedBufferSize = 0;
 
   VirtualCameraBridge() {
     _loadLibrary();
@@ -70,9 +67,7 @@ class VirtualCameraBridge {
 
       if (_dylib != null) {
         _initCam = _dylib!.lookupFunction<_InitCamC, _InitCamDart>('InitVirtualCamera');
-        _sendFrameGrading = _dylib!.lookupFunction<_SendFrameGradingC, _SendFrameGradingDart>('SendFrameWithGrading');
-        _registerFilter = _dylib!.lookupFunction<_RegisterFilterC, _RegisterFilterDart>('RegisterVirtualCameraFilter');
-        _unregisterFilter = _dylib!.lookupFunction<_UnregisterFilterC, _UnregisterFilterDart>('UnregisterVirtualCameraFilter');
+        _sendJpegFrame = _dylib!.lookupFunction<_SendJpegFrameC, _SendJpegFrameDart>('SendJpegFrameWithGrading');
         _closeCam = _dylib!.lookupFunction<_CloseCamC, _CloseCamDart>('CloseVirtualCamera');
       }
     } catch (_) {}
@@ -87,43 +82,67 @@ class VirtualCameraBridge {
     return false;
   }
 
-  int sendFrame(Pointer<Uint8> bgraPointer, int size, GradingSettings settings) {
-    if (_sendFrameGrading != null && _isInitialized) {
-      return _sendFrameGrading!(
-        bgraPointer,
-        size,
-        settings.brightness,
-        settings.contrast,
-        settings.saturation,
-        settings.warmth,
-        settings.tint,
-        settings.flipHorizontal ? 1 : 0,
-        settings.flipVertical ? 1 : 0,
-        settings.rotation,
-      );
+  int sendJpegFrame(Uint8List jpegBytes, GradingSettings settings) {
+    if (_sendJpegFrame == null || !_isInitialized || jpegBytes.isEmpty) {
+      return -1;
     }
-    return -1;
+
+    // Allocate / reuse native buffer
+    final int len = jpegBytes.length;
+    if (_nativeBuffer == null || _allocatedBufferSize < len) {
+      if (_nativeBuffer != null) {
+        calloc.free(_nativeBuffer!);
+      }
+      _allocatedBufferSize = (len * 1.5).toInt();
+      _nativeBuffer = calloc<Uint8>(_allocatedBufferSize);
+    }
+
+    // Copy bytes to native memory
+    _nativeBuffer!.asTypedList(len).setAll(0, jpegBytes);
+
+    return _sendJpegFrame!(
+      _nativeBuffer!,
+      len,
+      settings.brightness,
+      settings.contrast,
+      settings.saturation,
+      settings.warmth,
+      settings.tint,
+      settings.flipHorizontal ? 1 : 0,
+      settings.flipVertical ? 1 : 0,
+      settings.rotation,
+    );
   }
 
-  bool registerSystemWebcam(String friendlyName) {
-    if (_registerFilter != null) {
-      final namePtr = friendlyName.toNativeUtf16();
-      final res = _registerFilter!(namePtr);
-      calloc.free(namePtr);
-      return res == 0;
-    }
-    return false;
-  }
+  Future<bool> registerSystemWebcam() async {
+    try {
+      final exeDir = File(Platform.resolvedExecutable).parent.path;
+      final batPath = p.join(exeDir, 'Register-Camera.bat');
+      
+      // Execute elevated registration using PowerShell Start-Process -Verb RunAs
+      final result = await Process.run('powershell', [
+        '-NoProfile',
+        '-ExecutionPolicy', 'Bypass',
+        '-Command',
+        'Start-Process', 'cmd.exe',
+        '-ArgumentList', "\"/c `\"$batPath`\"\"",
+        '-Verb', 'RunAs',
+        '-Wait'
+      ]);
 
-  bool unregisterSystemWebcam() {
-    if (_unregisterFilter != null) {
-      return _unregisterFilter!() == 0;
+      return result.exitCode == 0;
+    } catch (_) {
+      return false;
     }
-    return false;
   }
 
   void close() {
     _closeCam?.call();
+    if (_nativeBuffer != null) {
+      calloc.free(_nativeBuffer!);
+      _nativeBuffer = null;
+      _allocatedBufferSize = 0;
+    }
     _isInitialized = false;
   }
 }
