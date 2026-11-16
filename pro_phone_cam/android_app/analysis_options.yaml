@@ -1,0 +1,15 @@
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  exclude:
+    - build/**
+    - android/**
+  errors:
+    deprecated_member_use: ignore
+    unnecessary_brace_in_string_interps: ignore
+    unnecessary_import: ignore
+    prefer_const_constructors: ignore
+
+linter:
+  rules:
+    avoid_print: false
