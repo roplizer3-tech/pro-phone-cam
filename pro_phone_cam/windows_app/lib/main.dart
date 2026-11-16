@@ -1,7 +1,7 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'models/camera_info.dart';
 import 'models/grading_settings.dart';
 import 'services/adb_daemon.dart';
@@ -44,10 +44,12 @@ class StudioMainPage extends StatefulWidget {
 }
 
 class _StudioMainPageState extends State<StudioMainPage> {
+  // Services
   late final AdbDaemon _adbDaemon;
   late final FrameReceiver _frameReceiver;
   final VirtualCameraBridge _virtualCam = VirtualCameraBridge();
 
+  // State
   bool _isPhoneConnected = false;
   String _phoneSerial = 'None';
   bool _isVirtualCamRegistered = false;
@@ -78,25 +80,29 @@ class _StudioMainPageState extends State<StudioMainPage> {
   }
 
   Future<void> _loadSavedSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    final savedJson = prefs.getString('prophone_grading_preset');
-    if (savedJson != null) {
-      try {
+    try {
+      final file = File('prophone_preset.json');
+      if (await file.exists()) {
+        final savedJson = await file.readAsString();
         setState(() {
           _grading = GradingSettings.fromJson(jsonDecode(savedJson));
         });
-      } catch (_) {}
-    }
+      }
+    } catch (_) {}
   }
 
   Future<void> _saveSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('prophone_grading_preset', jsonEncode(_grading.toJson()));
+    try {
+      final file = File('prophone_preset.json');
+      await file.writeAsString(jsonEncode(_grading.toJson()));
+    } catch (_) {}
   }
 
   void _initServices() {
+    // 1. Initialize DirectShow Virtual Camera in Shared Memory (1080p @ 60 FPS)
     _virtualCam.initCamera(1920, 1080, 60);
 
+    // 2. Setup Frame Receiver
     _frameReceiver = FrameReceiver(
       onFrameReceived: (bytes, timestamp, cameraId) {
         setState(() {
@@ -131,6 +137,7 @@ class _StudioMainPageState extends State<StudioMainPage> {
       onLog: _addLog,
     );
 
+    // 3. Setup Auto-USB Plug & Play Daemon
     _adbDaemon = AdbDaemon(
       onDevicePlugged: (serial) {
         setState(() {
@@ -240,6 +247,7 @@ class _StudioMainPageState extends State<StudioMainPage> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    // Left/Center: Video Canvas Preview & Real-Time Stats
                     Expanded(
                       child: PreviewPanel(
                         frameBytes: _latestFrameBytes,
@@ -252,6 +260,7 @@ class _StudioMainPageState extends State<StudioMainPage> {
                       ),
                     ),
                     const SizedBox(width: 16),
+                    // Right: Studio Controls (Anti-Mirror, Color Grading, Camera Remote)
                     StudioControls(
                       grading: _grading,
                       onGradingChanged: _handleGradingChanged,
@@ -315,6 +324,7 @@ class _StudioMainPageState extends State<StudioMainPage> {
             ],
           ),
           const Spacer(),
+          // DirectShow System Registration Button
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
               backgroundColor: _isVirtualCamRegistered ? const Color(0xFF10B981) : const Color(0xFF1E222D),
@@ -335,6 +345,7 @@ class _StudioMainPageState extends State<StudioMainPage> {
             ),
           ),
           const SizedBox(width: 12),
+          // Reconnect USB button
           IconButton(
             tooltip: 'Force USB Re-Forward & Launch',
             icon: const Icon(Icons.sync_rounded, color: Colors.white70),
@@ -360,7 +371,10 @@ class _StudioMainPageState extends State<StudioMainPage> {
           const SizedBox(width: 8),
           Text(
             _isPhoneConnected ? 'Device: $_phoneSerial' : 'No Phone Connected (Checking ADB...)',
-            style: TextStyle(fontSize: 11, color: _isPhoneConnected ? Colors.white70 : Colors.grey),
+            style: TextStyle(
+              fontSize: 11,
+              color: _isPhoneConnected ? Colors.white70 : Colors.grey,
+            ),
           ),
           const SizedBox(width: 24),
           const Text('Tunnel: 127.0.0.1:5000', style: TextStyle(fontSize: 11, color: Colors.grey)),
